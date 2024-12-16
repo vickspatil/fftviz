@@ -1,91 +1,175 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FFTViz</title>
-
-  <!-- Link to Poppins font from Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-  
-  <!-- Internal CSS for styling -->
-  <style>
-    body {
-      font-family: 'Poppins', sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f0f4f8;
-      color: #333;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      text-align: center;
-    }
-    
-    h1 {
-      font-size: 3rem;
-      font-weight: 600;
-      color: #4a90e2;
-    }
-
-    .container {
-      background-color: #fff;
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      padding: 2rem;
-      max-width: 600px;
-      width: 100%;
-    }
-
-    p {
-      font-size: 1.2rem;
-      line-height: 1.6;
-      color: #555;
-    }
-
-    .cta-button {
-      background-color: #4a90e2;
-      color: white;
-      padding: 0.8rem 2rem;
-      border: none;
-      border-radius: 25px;
-      font-size: 1.1rem;
-      cursor: pointer;
-      transition: background-color 0.3s ease;
-    }
-
-    .cta-button:hover {
-      background-color: #357ab7;
-    }
-
-    footer {
-      position: absolute;
-      bottom: 10px;
-      font-size: 0.9rem;
-      color: #777;
-    }
-
-    footer a {
-      color: #4a90e2;
-      text-decoration: none;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sine Wave Visualization</title>
+    <style>
+        body { margin: 0; }
+        #webgl-container { width: 100vw; height: 100vh; }
+        #gui-container { position: absolute; top: 10px; left: 10px; z-index: 10; }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Welcome to FFTViz!</h1>
-    <p>Your go-to tool for visualizing FFT (Fast Fourier Transform) data.</p>
-    <p>Start exploring, and dive into the world of data analysis with ease!</p>
-    <!-- Button to trigger JS function -->
-    <button class="cta-button" id="loadButton">Start Visualization</button>
-  </div>
+    <div id="webgl-container"></div>
+    <div id="gui-container"></div>
+    <button id="loadButton" style="position: absolute; top: 10px; right: 10px;">Load FFT</button>
 
-  <footer>
-    <p>Created by <a href="https://github.com/vickspatil" target="_blank">vickspatil</a> | <a href="https://github.com/vickspatil/fftviz" target="_blank">Repository</a></p>
-  </footer>
+    <!-- Include Three.js, dat.GUI, FFT.js, and GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fft.js/5.0.0/fft.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
 
-  <!-- Link to your index.js file -->
-  <script src="index.js"></script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GUI } from 'dat.gui';
+        import FFT from 'fft.js';
+        import { gsap } from 'gsap';
+
+        // Add Toggle for Domain View
+        const viewParams = { view: 'Time Domain' };
+        
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('webgl-container').appendChild(renderer.domElement);
+
+        // Parameters for Waveform
+        const params = {
+            amplitude: 2,
+            frequency: 1,
+            view: 'Time Domain',
+        };
+
+        // Add Sine Wave Geometry
+        const geometry = new THREE.BufferGeometry();
+        const vertices = [];
+        const timeDomainVertices = [];
+        const points = 500;
+        
+        for (let i = 0; i < points; i++) {
+            const x = (i / points) * 20 - 10;
+            const y = params.amplitude * Math.sin(params.frequency * x);
+            vertices.push(x, y, 0);
+            timeDomainVertices.push(y);
+        }
+
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+        // Line Material & Mesh
+        const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        const line = new THREE.Line(geometry, material);
+        scene.add(line);
+
+        // Set camera position
+        camera.position.z = 15;
+
+        // GUI Setup
+        const gui = new GUI({ autoPlace: false });
+        gui.add(params, 'amplitude', 0.5, 100, 0.1).onChange(updateWaveform);
+        gui.add(params, 'frequency', 0.5, 100, 0.1).onChange(updateWaveform);
+        
+        document.getElementById('gui-container').appendChild(gui.domElement);
+
+        // FFT Computation Logic
+        function computeFFT(amplitudeArray) {
+            const paddedArray = padArray(amplitudeArray);
+            const fft = new FFT(paddedArray.length);
+            const complexArray = fft.createComplexArray();
+            const spectrum = fft.createComplexArray();
+
+            for (let i = 0; i < paddedArray.length; i++) {
+                complexArray[i * 2] = paddedArray[i];
+                complexArray[i * 2 + 1] = 0;
+            }
+
+            fft.transform(spectrum, complexArray);
+
+            const magnitudes = [];
+            for (let i = 0; i < paddedArray.length / 2; i++) {
+                const real = spectrum[i * 2];
+                const imag = spectrum[i * 2 + 1];
+                magnitudes.push(Math.sqrt(real * real + imag * imag));
+            }
+
+            return magnitudes;
+        }
+
+        // Pad Array to Next Power of Two
+        function padArray(array) {
+            const originalLength = array.length;
+            const newLength = Math.pow(2, Math.ceil(Math.log2(originalLength)));
+            const paddedArray = new Float32Array(newLength);
+            paddedArray.set(array);
+            return paddedArray;
+        }
+
+        // Smooth Transition Function
+        function smoothTransition(newValues) {
+            const positions = geometry.attributes.position.array;
+
+            for (let i = 0; i < newValues.length; i++) {
+                gsap.to(positions, {
+                    duration: 1,
+                    [i * 3 + 1]: newValues[i],
+                    onUpdate: () => geometry.attributes.position.needsUpdate = true,
+                });
+            }
+        }
+
+        // Update View Based on GUI
+        function updateView() {
+            const positions = geometry.attributes.position.array;
+
+            if (params.view === 'Time Domain') {
+                for (let i = 0; i < points; i++) {
+                    positions[i * 3 + 1] = timeDomainVertices[i];
+                }
+                geometry.attributes.position.needsUpdate = true;
+
+            } else if (params.view === 'Frequency Domain') {
+                const magnitudes = computeFFT(timeDomainVertices);
+                smoothTransition(magnitudes);
+            }
+        }
+
+        // Update Waveform Function
+        function updateWaveform() {
+            const positions = geometry.attributes.position.array;
+            for (let i = 0; i < points; i++) {
+                const x = (i / points) * 20 - 10;
+                positions[i * 3 + 1] = params.amplitude * Math.sin(params.frequency * x);
+                timeDomainVertices[i] = positions[i * 3 + 1];
+            }
+            geometry.attributes.position.needsUpdate = true;
+            
+            updateView();
+        }
+
+        // Resize the renderer on window resize
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Button to Start Visualization
+        document.getElementById("loadButton").addEventListener("click", function () {
+            alert("Button clicked! Now you can add your FFT logic here.");
+            updateView();
+        });
+    </script>
 </body>
 </html>
