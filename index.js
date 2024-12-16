@@ -2,6 +2,25 @@ import * as THREE from 'three';
 import { GUI } from 'dat.gui';
 import FFT from 'fft.js';
 import { gsap } from 'gsap';
+// This will wait for the DOM content to load
+document.addEventListener("DOMContentLoaded", function () {
+  // Get the button by its ID
+  const button = document.getElementById("loadButton");
+
+  // Add click event listener to the button
+  button.addEventListener("click", function () {
+    alert("Button clicked! Now you can add your FFT logic here.");
+    
+    // Example: Call a function here that starts your visualization or logic
+    startVisualization();
+  });
+
+  // Function to simulate FFT visualization
+  function startVisualization() {
+    console.log("FFT Visualization started!");
+    // Your FFT logic goes here
+  }
+});
 
 // Scene, Camera, Renderer
 const scene = new THREE.Scene();
